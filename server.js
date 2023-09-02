@@ -24,7 +24,6 @@ function createDefaultFiles() {
     }
 }
 
-const process = require('process')
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const net = require("net");
@@ -149,11 +148,8 @@ let api_openai = "https://api.openai.com/v1";
 let api_claude = "https://api.anthropic.com/v1";
 let main_api = "kobold";
 
-let response_generate_novel;
 let characters = {};
 let response_dw_bg;
-let first_run = true;
-
 
 let color = {
     byNum: (mess, fgNum) => {
@@ -3755,7 +3751,7 @@ async function sendAI21Request(request, response) {
 
 }
 
-app.post("/tokenize_ai21", jsonParser, function (request, response_tokenize_ai21 = response) {
+app.post("/tokenize_ai21", jsonParser, async function (request, response_tokenize_ai21) {
     if (!request.body) return response_tokenize_ai21.sendStatus(400);
     const options = {
         method: 'POST',
@@ -3767,10 +3763,14 @@ app.post("/tokenize_ai21", jsonParser, function (request, response_tokenize_ai21
         body: JSON.stringify({ text: request.body[0].content })
     };
 
-    fetch('https://api.ai21.com/studio/v1/tokenize', options)
-        .then(response => response.json())
-        .then(response => response_tokenize_ai21.send({ "token_count": response.tokens.length }))
-        .catch(err => console.error(err));
+    try {
+        const response = await fetch('https://api.ai21.com/studio/v1/tokenize', options);
+        const data = await response.json();
+        return response_tokenize_ai21.send({ "token_count": data?.tokens?.length || 0 });
+    } catch (err) {
+        console.error(err);
+        return response_tokenize_ai21.send({ "token_count": 0 });
+    }
 });
 
 app.post("/save_preset", jsonParser, function (request, response) {
@@ -4134,7 +4134,7 @@ function backupSettings() {
         const backupFile = path.join(directories.backups, `settings_${generateTimestamp()}.json`);
         fs.copyFileSync(SETTINGS_FILE, backupFile);
 
-        let files = fs.readdirSync(directories.backups);
+        let files = fs.readdirSync(directories.backups).filter(f => f.startsWith('settings_'));
         if (files.length > MAX_BACKUPS) {
             files = files.map(f => path.join(directories.backups, f));
             files.sort((a, b) => fs.statSync(a).mtimeMs - fs.statSync(b).mtimeMs);
